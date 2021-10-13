@@ -1,4 +1,4 @@
-Proposal for a JSON Schema vocabulary for common database use cases.
+# Proposal for a JSON Schema vocabulary for common database use cases.
 
 Change history
 October 12th,  	beda.hammerschmidt@oracle.com		inititial version
@@ -6,7 +6,7 @@ October 12th,  	beda.hammerschmidt@oracle.com		inititial version
 
 The following write-up describes common database use cases that could benefit from JSON schema. It also proposes some extensions to JSON schema (additional keywords that can be ignored by validators not dealing with database use cases). The goal of this project is to solve common use cases in a product and vendor independent manner. Feedback, additions and modifications are appreciated. The current draft is written from a sql-ish point of view (Oracle) but we should make sure that noSql products like MongoDB are not excluded. Also, any solution should allow vendor-specific extension. 
 
-Description of current state of affairs and high-level goals:
+## Description of current state of affairs and high-level goals:
 
 1) JSON is supported in most databases (SQL/ noSQL, open source/commercial)
 2) JSON is schema flexible but users request means to 'ensure some data properties'
@@ -18,9 +18,10 @@ Description of current state of affairs and high-level goals:
 4) For efficiency, databases store JSON in non-textual form but instead in a binary encoding (Oracle OSON, Mongo BSON, Postgres JsonB,…). These binary formats also have a richer type system including types like DATE or TIMESTAMP which have no counterpart in the very simple JSON type system. We aim to allow validation of these types - this requires to extend JSON schema with an extended type system. JSON Schema already does some extensions but in a somewhat inconsistent manner: it added 'integer' to types and 'date-time' to format. As we want to keep existing validators working, we propose a new keyword 'sqlType' that holds additional type instead of adding new values to the 'type' keyword - but we're open to discuss this.
 5) Some databases allow the creation of JSON data from relational tables which themselves have data types and constraints. A user that receives generated data is likely interested in a description of the data. We propose to add functionalities to auto-generate JSON schemas for tables, objects and views in a way that relational constraints and type information is preserved.
  
-The following describes the use cases in detail:
+## The following describes the use cases in detail:
 
-*Validation using IS JSON*
+### Validation using IS JSON
+
 The existing and ISO standard SQL operator 'IS JSON' performs JSON syntax checks and Oracle's implementation allows for extra conditions to be me - like unique key names. IS JSON can be used in the WHERE clause to serve as a row filter or in a check constraint to reject all insert/updates that do not satisfy the IS JSON condition(s).
 
 Example: Select data from mytable where data IS JSON (with unique keys)
@@ -43,7 +44,8 @@ JSON Schema has identified some shortcomings but addresses them in different (in
 
 Databases have richer type system and SQL standardized it. SQL databases like Postgre, Oracle or MySQL therefore share a more or less common type system. The internal byte representation of a typed value may be different but the semantics and value ranges are similar or the same.
 
-We propose the following
+### We propose the following
+
 The existing 'type' keyword/attribute remains as is. Existing validators continue to work as is.
 A new keyword/attribute 'sqlType' is being added. It is supported by in-database validators that the vendors create for their product (understanding their byte representation for a given type). The valid values for the 'sqlType' keyword are the type names as defined in the SQL standard (e.g. DATE, DOUBLE, TIMESTAMP). Vendors can also add custom type names that only apply for their products.
 
@@ -77,7 +79,7 @@ Examples:
 }
 
 
-*Automatic type coercion during insert*
+## Automatic type coercion during insert
 
 For databases that store JSON in a binary format the data can often be encoded into that format on the client - for example, a MongoDB driver sends BSON data to the MongoDB server. In such case the database does not have to convert textual JSON to its binary representation and hence validation using 'sqlType' can per performed. It is to be noted that in this case no external validator is being used.
 It is a different story if textual JSON is sent to the database and there into the binary representation. In this case, an external validator may accept that a value is a 'date-time' formatted string ('type' and 'format' attributes) but the internal validator would reject the insertion as the same string is not a DATE 'sqlType'. What we need is the inverse of JSON_Serialize: where JSON_Serialize mapped a richer type system to a small one we now need additional information to convert a 'reduced' type to its 'real' type. This information exists in the JSON schema - instead of a validation we also do a type coercion lookup. This is optional and explicit syntax is needed to enable it.
@@ -131,7 +133,8 @@ CREATE TABLE customers (
 
 
 
-*Using JSON schema to describe database objects and generated JSON*
+## Using JSON schema to describe database objects and generated JSON
+
 This use case is not about persistent JSON data being stored in a database but about transient data being generated by the database - and then shipped to a client (application).
 A consumer of this JSON data likely wants to understand mor about the data: the used field names, the value types and ranges and the shape of objects/arrays. JSON schema is capable of conveying all this information - in addition it can be used to perform client-side (external) validations after data has been modified. For example, an update could be rejected because a value exceeded its maximum length.
 
