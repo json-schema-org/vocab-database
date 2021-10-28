@@ -4,8 +4,9 @@
 
 | Date | Author | Comments |
 | --- | --- | --- |
-| October 13th | srikrishnan.s.suresh@oracle.com | Added code blocks |
-| October 12th | beda.hammerschmidt@oracle.com | Inititial version |
+| October 28, 2021 | srikrishnan.s.suresh@oracle.com | Add column describe, validation report use cases |
+| October 13, 2021 | srikrishnan.s.suresh@oracle.com | Added code blocks |
+| October 12, 2021 | beda.hammerschmidt@oracle.com | Inititial version |
 
 
 ## Introduction
@@ -225,3 +226,61 @@ SELECT  dbms_json.describe_schema('ADDRESS_TYP') AS SCHEMA FROM dual;
 ```
 The first argument for this function is the object to be described. The second one is schema name and is optional.
 `describe_schema()` function also takes in column name as optional argument. If a column name is passed,  the schema for that column alone is generated.
+
+#### Describe a column in table/view
+It is possible to restrict the JSON schema to be generated to a single column, by specifying the column name (optional parameter) in call to `describe_schema()`.
+
+```
+SELECT dbms_json.describe_schema('EMPLOYEES', 'HR', 'JOB_ID') FROM dual;
+
+{ 
+   "title": "JOB_ID",
+   "description" : "Current job of the employee; foreign key to job_id column of the jobs table. 
+                    A not null column.", 
+   "type" : "string", 
+   "sqlType" : "varchar2", 
+   "maxLength" : 10
+}
+```
+### Generating validation report
+We propose a function to generate the schema validation report. The report contains information on the status of validation, i.e. if validation succeeded or failed, and the reasons for failure. Here are some examples:
+
+(a) When validation succeeds
+```
+SELECT dbms_json.schema_validation_report('{"a" : 1}', '{"type": "object"}') AS report FROM dual;
+
+REPORT
+--------------------
+{
+  "valid" : true,
+  "errors" :
+  [
+  ]
+}
+```
+
+(b) When validation fails
+```
+SELECT dbms_json.schema_validation_report('{"a" : 1}', '{"type": "array"}') AS report FROM dual;
+
+REPORT
+--------------------------------------------------------------------------------
+{
+  "valid" : false,
+  "errors" :
+  [
+    {
+      "schemaPath" : "$",
+      "instancePath" : "$",
+      "code" : "JZN-00501",
+      "error" : "JSON schema validation failed"
+    },
+    {
+      "schemaPath" : "$.type",
+      "instancePath" : "$",
+      "code" : "JZN-00503",
+      "error" : "invalid type found, actual: object, expected: array"
+    }
+  ]
+}
+```
