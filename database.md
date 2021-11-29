@@ -4,9 +4,10 @@
 
 | Date | Author | Comments |
 | --- | --- | --- |
-| October 28, 2021 | srikrishnan.s.suresh@oracle.com | Add column describe, validation report use cases |
-| October 13, 2021 | srikrishnan.s.suresh@oracle.com | Added code blocks |
-| October 12, 2021 | beda.hammerschmidt@oracle.com | Inititial version |
+| November 29, 2021 | beda.hammerschmidt@oracle.com   | Add more information to sqlType versus type |
+| October  28, 2021 | srikrishnan.s.suresh@oracle.com | Add column describe, validation report use cases |
+| October  13, 2021 | srikrishnan.s.suresh@oracle.com | Added code blocks |
+| October  12, 2021 | beda.hammerschmidt@oracle.com   | Inititial version |
 
 
 ## Introduction
