@@ -60,13 +60,11 @@ Databases have richer type system and SQL standardized it. SQL databases like Po
 
 ### Proposal
 
-The existing `'type'` schema keyword remains as is. Existing validators continue to work as is. A new keyword/attribute `'sqlType'` is being added. It is supported by in-database validators that the vendors create for their product (understanding their byte representation for a given type). The valid values for the `'sqlType'` keyword are the type names as defined in the SQL standard (e.g. `DATE`, `DOUBLE`, `TIMESTAM`P). Vendors can also add custom type names that only apply for their products.
+The existing `'type'` schema keyword remains as is so that existing (third part) validators continue to work as is. A new keyword/attribute `'sqlType'` is being added and supported by in-database (vendor specific) validators. The valid values for the `'sqlType'` keyword are the type names as defined in the SQL standard (e.g. `DATE`, `DOUBLE`, `TIMESTAM`P). Vendors can also add custom type names that only apply for their products. Note: For extended types in-database validators will work on a binary representation of a standard type that is likely different from other vendors implementation of the same type (Postgres TIMESTAMP has a different bit representation than Oracle's TIMESTAMP) but this difference is not relevant as in-database validators are product specific. Cross product interoperability is achived by using common type names - not byte representation!
 
-Note: instead of `'sqlType'` we discussed to call it `'extendedType'` but as the values are SQL type names we favored  'sqlType'
+Each 'sqlType' value corresponds to exactly one `'type'` value because every binary JSON representation (e.g. `BSON`, `OSON`, `JsonB`) can be serialized (stringify'd) to a textual JSON representation that uses the standard JSON type system. As JSON has no syntax to expresse DATEs or TIMESTAMPs, a binary `DATE` value would become a JSON string (in `ISO 8601` format). The ISO standard SQL operator `JSON_Serialize()` performs the conversion to textual JSON. Incompatible 'sqlType' and 'type' combinations (e.g. TIMESTAMP and Boolean) can we detected at schema compilation time and raised as an error.
 
-It is very important to understand that each 'sqlType' value corresponds to exactly one `'type'` value! The correspondence becomes clear by the fact that every binary JSON representation (e.g. `BSON`, `OSON`, `JsonB`) can be converted/serialized/stringify'd to a textual representation. For example, a binary `DATE` value would become a JSON string (in `ISO 8601` format). The standard SQL operator `JSON_Serialize()` performs the conversion to textual JSON.
-
-This 'type duality' allows us to perform validation with external validators (outside the database) as well as internal validators (inside the database) using the same schema! The external validator uses the 'type' and 'format' attributes whereas the internal validator uses the `'sqlType'` attribute. Compilation of the JSON schema needs to make sure that a compatible combination of `'sqlType'` and `'type'` is used (`DATE` cannot be matched to `BOOLEAN`). 
+Therefore, there is a 'type duality' of 'type' and 'sqlType' values. A JSON schema document can contain both at the same time which allows to perform validation with external validators (outside the database) as well as in-database validators using the same schema. The external validator uses the 'type' and 'format' attributes whereas the internal validator prefers the `'sqlType'` attribute if present. If no `'sqlType'` attribute is present then the in-database validators fallsback on the 'type' and 'format' attributes and performs exactly like the external validator. 
 
 Examples:
 ```
@@ -93,15 +91,16 @@ Examples:
 }
 ```
 
-## Automatic type coercion during insert
+## Automatic type cast during insert
 
-For databases that store JSON in a binary format the data can often be encoded into that format on the client - for example, a MongoDB driver sends BSON data to the MongoDB server. In such case the database does not have to convert textual JSON to its binary representation and hence validation using `'sqlType'` can be performed. It is to be noted that in this case no external validator is being used.
-It is a different story if textual JSON is sent to the database and there into the binary representation. In this case, an external validator may accept that a value is a 'date-time' formatted string (`'type'` and `'format'` attributes) but the internal validator would reject the insertion as the same string is not a DATE `'sqlType'`. What we need is the inverse of `JSON_Serialize()`: where `JSON_Serialize()` mapped a richer type system to a small one we now need additional information to convert a 'reduced' type to its 'real' type. This information exists in the JSON schema - instead of a validation we also do a type coercion lookup. This is optional and explicit syntax is needed to enable it.
+For databases that support a binary JSON format data can be encoded on the client - for example, a MongoDB driver sends BSON data to the MongoDB server. In such case the database does not have to convert textual JSON to its binary representation and hence validation using `'sqlType'` can be performed. It is to be noted that in this case no external validator is being used at all.
+It is a different story if textual JSON is sent to the database follwed by an encoding process to a binary representation (server-side encoding). In this case, an external validator may accept that a value is a 'date-time' formatted string (`'type'` and `'format'` attributes) but the internal validator would reject the insertion as the same string is not a DATE `'sqlType'`. 
+What is needed is the inverse of `JSON_Serialize()`: where `JSON_Serialize()` mapps a richer type system to a smaller one we now need additional information to convert a 'reduced' type to its 'real' type). This information exists in the JSON schema - it defines the type for scalar attributes, for example that a birthdate is a DATE type. In this case (INSERT) in addition to the validation we also do a type coercion lookup to cast a string birthdate to a DATE. This is optional and explicit syntax is needed to enable it.
 
 ```
 CREATE TABLE t1 (
   id NUMBER,
-  data JSON VALIDATE COERCE USING '<json_schema_expr>'
+  data JSON VALIDATE CAST USING '<json_schema_expr>'
 );
 ```
 
