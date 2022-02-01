@@ -1,15 +1,5 @@
 # Proposal for a JSON Schema vocabulary for common database use cases.
 
-## Change history
-
-| Date | Author | Comments |
-| --- | --- | --- |
-| November 29, 2021 | beda.hammerschmidt@oracle.com   | Add more information to sqlType versus type |
-| October  28, 2021 | srikrishnan.s.suresh@oracle.com | Add column describe, validation report use cases |
-| October  13, 2021 | srikrishnan.s.suresh@oracle.com | Added code blocks |
-| October  12, 2021 | beda.hammerschmidt@oracle.com   | Inititial version |
-
-
 ## Introduction
 The following write-up describes common database use cases that could benefit from JSON schema. It also proposes some extensions to JSON schema (additional keywords that can be ignored by validators not dealing with database use cases). The goal of this project is to solve common use cases in a product and vendor independent manner. Feedback, additions and modifications are appreciated. The current draft is written from a SQL-ish point of view (Oracle) but we should make sure that noSql products like MongoDB are not excluded. Also, any solution should allow vendor-specific extension. 
 
@@ -170,7 +160,7 @@ The function to invoke this mapping is not part of this proposal. We use methods
 #### Describe a database table
 
 ```
-SELECT dbms_json.describe_schema('EMPLOYEES', 'HR') FROM dual;
+SELECT dbms_json_schema.describe('EMPLOYEES', 'HR') FROM dual;
 { 
   "title" : "EMPLOYEES", 
   "description" : "employees table. Contains 107 rows. References with departments,jobs, job_history 
@@ -197,7 +187,7 @@ SELECT dbms_json.describe_schema('EMPLOYEES', 'HR') FROM dual;
 #### Describe a database object type
 
 ```
-SELECT  dbms_json.describe_schema('ADDRESS_TYP') AS SCHEMA FROM dual;
+SELECT  dbms_json_schema.describe('ADDRESS_TYP') AS SCHEMA FROM dual;
 {
   "title" : "ADDRESS_TYP",
   "type" : "object",
@@ -231,7 +221,7 @@ The first argument for this function is the object to be described. The second o
 It is possible to restrict the JSON schema to be generated to a single column, by specifying the column name (optional parameter) in call to `describe_schema()`.
 
 ```
-SELECT dbms_json.describe_schema('EMPLOYEES', 'HR', 'JOB_ID') FROM dual;
+SELECT dbms_json_schema.describe('EMPLOYEES', 'HR', 'JOB_ID') FROM dual;
 
 { 
    "title": "JOB_ID",
@@ -247,7 +237,7 @@ We propose a function to generate the schema validation report. The report conta
 
 (a) When validation succeeds
 ```
-SELECT dbms_json.schema_validation_report('{"a" : 1}', '{"type": "object"}') AS report FROM dual;
+SELECT dbms_json_schema.validate_report('{"a" : 1}', '{"type": "object"}') AS report FROM dual;
 
 REPORT
 --------------------
@@ -261,7 +251,7 @@ REPORT
 
 (b) When validation fails
 ```
-SELECT dbms_json.schema_validation_report('{"a" : 1}', '{"type": "array"}') AS report FROM dual;
+SELECT dbms_json_schema.validate_report('{"a" : 1}', '{"type": "array"}') AS report FROM dual;
 
 REPORT
 --------------------------------------------------------------------------------
