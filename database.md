@@ -1,25 +1,28 @@
 # Proposal for a JSON Schema vocabulary for common database use cases.
 
 ## Introduction
-The following write-up describes common database use cases that could benefit from JSON schema. It also proposes some extensions to JSON schema (additional keywords that can be ignored by validators not dealing with database use cases). The goal of this project is to solve common use cases in a product and vendor independent manner. Feedback, additions and modifications are appreciated. The current draft is written from a SQL-ish point of view (Oracle) but we should make sure that noSql products like MongoDB are not excluded. Also, any solution should allow vendor-specific extension. 
 
-## Description of current state of affairs and high-level goals:
+The following write-up describes common database use cases that could benefit from JSON schema. It also proposes some extensions to JSON schema (additional keywords that can be ignored by validators not dealing with database use cases). The goal of this project is to solve common use cases in a product and vendor independent manner. The proposal also caters to vendors (not database ones necessarily) that process JSON using a binary format. The current draft is written from a SQL point of view (Oracle) but we should make sure that NoSQL products like MongoDB are not excluded. Also, any solution should allow vendor-specific extensions. Feedback, request for additions and modifications in this proposal are appreciated. 
 
-1) JSON is supported in most databases (SQL/ noSQL, open source/commercial)
-2) JSON is schema flexible but users request means to 'ensure some data properties'
-    - Examples: required fields, optional fields, data types, value constraints, etc.
-    - JSON Schema looks like the right solution
-3) SQL extensions for JSON have been added to the ISO SQL 2016 standard (SQL/JSON)
-    - Oracle targets to extend the existing and standardize `'IS JSON'` SQL operator to allow schema validation. The extension will be added to the standard - making the ISON standard refer to JSON Schema (ideally an RFC is published by then).
-    - For relational users it may be easier to define JSON Schema is a more sql-ish way. We therefore propose a SQL-like syntax of defining a (subset of a) JSON schema for IS JSON.
-4) For efficiency, databases store JSON in non-textual form but instead in a binary encoding (Oracle OSON, Mongo BSON, Postgres JsonB,…). These binary formats also have a richer type system including types like `DATE` or `TIMESTAMP` which have no counterpart in the very simple JSON type system. We aim to allow validation of these types - this requires to extend JSON schema with an extended type system. JSON Schema already does some extensions but in a somewhat inconsistent manner: it added `'integer'` to types and `'date-time'` to format. As we want to keep existing validators working, we propose a new keyword `'sqlType'` that holds additional type instead of adding new values to the `'type'` keyword - but we're open to discuss this.
-5) Some databases allow the creation of JSON data from relational tables which themselves have data types and constraints. A user that receives generated data is likely interested in a description of the data. We propose to add functionalities to auto-generate JSON schemas for tables, objects and views in a way that relational constraints and type information is preserved.
+## Current state of affairs and high-level goals:
+
+1) JSON as a storage data type is supported in most database products (SQL/NoSQL, open source/commercial).
+2) JSON is schema flexible but users request means to enforce some data properties on it.
+    - Examples: required fields, optional fields, data types, constraints on values etc.
+    - JSON Schema looks like the right solution.
+3) SQL extensions for JSON have been added to the ISO SQL 2016 standard (SQL/JSON).
+    - Oracle aims to extend the existing and standardized `IS JSON` SQL operator to allow schema validation of JSON data.
+    - The extension will be added to the ISO standard - making the ISO standard refer to JSON Schema (ideally an RFC is published by then).
+    - For relational users, it may be easier to define JSON Schema is a more SQL-ish way. We therefore also propose a SQL-like syntax for defining a (subset of a) JSON schema for `IS JSON`.
+4) For efficiency, databases store JSON not as text but in a binary format (example, Oracle OSON, Mongo BSON, Postgres JsonB, etc.). These binary formats also have a richer type system, including types like `BINARY`, `FLOAT`, `DOUBLE`, `DATE`, `TIMESTAMP`, `INTERVAL`, etc. which have no counterpart in the standard JSON type system. We aim to allow validation of these extended types - this requires extending JSON schema vocabulary with an extended type system.
+5) JSON Schema already offers some extensions, but in a somewhat inconsistent manner; it added `'integer'` to types, `'date-time'` and `interval` to format. As we want to keep existing validators working, we propose a new keyword `'extendedType'` that holds additional type instead of adding new values to the existing `'type'` or `'format'` keyword.
+6) Some databases allow the creation of JSON data from relational tables that have columns with a data type and constraints. A user that receives generated data is likely interested in a description of the data. We therefore propose to add interfaces to generate JSON schemas for database objects such as tables, views and types in such a way that relational constraints and type information are preserved.
  
-## JSON schema database use cases
+## JSON Schema - database use cases
 
 ### Validation using IS JSON
 
-The existing and ISO standard SQL operator `'IS JSON'` performs JSON syntax checks and Oracle's implementation allows for extra conditions to be met - like unique key names. `IS JSON` can be used in the `WHERE` clause to serve as a row filter or in a check constraint to reject all insert/updates that do not satisfy the `IS JSON` condition(s).
+The existing and ISO standard SQL operator `IS JSON` performs JSON syntax checks and Oracle's implementation allows for extra conditions to be met - like unique key names. `IS JSON` can be used in the `WHERE` clause of a query to serve as a row filter or in a check constraint to reject any insert/update that do not satisfy the `IS JSON` condition(s).
 
 Example: 
 ```
@@ -28,80 +31,145 @@ FROM    mytable
 WHERE   data IS JSON (WITH UNIQUE KEYS);
 ```
 
-Proposal: We propose to extend 'IS JSON' to also perform a JSON Schema validation:
+#### Proposal
+
+We propose to extend 'IS JSON' operator to also perform JSON Schema validation. For example,
 ```
-SELECT  data
-FROM    mytable 
-WHERE   data IS JSON (VALIDATE USING '<JSON_schema_expr>');
+SELECT  <column_list>
+FROM    <table_name> 
+WHERE   <column_name> IS JSON VALIDATE USING '<JSON_schema_expr>';
 ```
-Note: `IS JSON` returns a `yes|no` answer. In the case of 'no' there is no reason given why the data failed the schema validation. To return proper error messages additional functionality is needed, like a package function, etc. This is not covered in this proposal.
-
-`IS JSON` as shown in the example above, accepts the JSON schema using an expression - this could be a string literal, a variable or something else that contains the schema. This aspect is also not covered in this proposal. The SQL standard likely will address this.
+Note: `IS JSON` returns a `true|false` answer. In the case of `false` return, there is no reason given for why the JSON instance failed the schema validation. To return proper error messages additional functionality is needed, like a package function, etc.
 
 
-Specific database challenge: how do we allow the validation of extended (SQL) types?
+`IS JSON` expression as shown in the example above, accepts the JSON schema using an expression - this could be a schema string literal, a bind variable or an identifier (database object) from which schema can be inferred. This aspect is not covered in this proposal. The SQL standard likely will address this.
 
-JSON has limited and fixed types: `object`, `array`, `string`, `number`, `boolean`, `null` whereas any 'real' (database) application uses temporal types like `DATE` and `TIMESTAMP`. Also, JSON does not define the range of numeric values while there is a multitude of different numeric data types for different purposes (currency, scientific data). The numeric type `DOUBLE` cannot even be mapped to a JSON number (without losses, because of the values `NAN`, `+INF`, `-INF`). 
+The following example illustrates the use of `IS JSON` in a `CHECK` constraint expression:
+
+```
+CREATE TABLE jtab (
+  id    NUMBER(6)  PRIMARY KEY,
+  jcol  JSON       CHECK (jcol IS JSON VALIDATE USING '{
+	"type": "object",
+	"properties": {
+		"id": {
+			"type": "number"
+		},
+		"name": {
+			"type": "string",
+			"maxLength": 20
+		},
+		"addresses": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"properties": {
+					"street": {
+						"type": "string",
+						"maxLength": 100
+					},
+					"zip": {
+						"type": "string",
+						"maxLength": 10
+					}
+				}
+			}
+		}
+	},
+	"required": ["id"]
+}')
+);
+```
+
+### Validation of extended types
+
+JSON has limited and fixed types: `object`, `array`, `string`, `number`, `boolean`, `null` whereas any real (database) application uses other types such as `BINARY`, `FLOAT`, `DOUBLE`, `DATE`, `TIMESTAMP`, `INTERVAL` etc. Also, JSON does not define the range of numeric values while there is a multitude of different numeric data types for different purposes (currency, scientific data). The numeric type `DOUBLE` cannot even be mapped to a JSON number (without losses, because of the values `"NAN"`, `"+INF"`, `"-INF"`). 
 
 JSON Schema has identified some shortcomings but addresses them in different (inconsistent?) ways:
  - It added `'integer'` to the type keyword,
  - It added a format keyword to ensure that a string follows ISO 8601 date-time shape.
 
-Databases have richer type system and SQL standardized it. SQL databases like Postgre, Oracle or MySQL therefore share a more or less common type system. The internal byte representation of a typed value may be different but the semantics and value ranges are similar or the same.
+Databases have richer type system and SQL standardized it. SQL databases like Oracle, Postgres, or MySQL therefore share a more or less common type system. The internal byte representation of a typed value may differ but the semantics and value ranges are similar or the same.
 
-### Proposal
+#### Proposal
 
-The existing `'type'` schema keyword remains as is so that existing (third part) validators continue to work as is. A new keyword/attribute `'sqlType'` is being added and supported by in-database (vendor specific) validators. The valid values for the `'sqlType'` keyword are the type names as defined in the SQL standard (e.g. `DATE`, `DOUBLE`, `TIMESTAM`P). Vendors can also add custom type names that only apply for their products. Note: For extended types in-database validators will work on a binary representation of a standard type that is likely different from other vendors implementation of the same type (Postgres TIMESTAMP has a different bit representation than Oracle's TIMESTAMP) but this difference is not relevant as in-database validators are product specific. Cross product interoperability is achived by using common type names - not byte representation!
+The behavior of existing `'type'` keyword in JSON schema remains as is, so that existing (third party) validators continue to work as is without any modifications. A new keyword/attribute `'extendedType'` is being added and supported by vendor specific validators. `'extendedType'` can be used instead of `'type'` keyword, or in conjunction as well. Incompatible values for `'type'` and `'extendedType'` will fail validation (just like JSON schema `false`), but is not an invalid schema. For instance,  `{"type": "boolean", "extendedType": "date"}` is a valid schema, but document validation will fail, as a type cannot be both boolean and date.
 
-Each 'sqlType' value corresponds to exactly one `'type'` value because every binary JSON representation (e.g. `BSON`, `OSON`, `JsonB`) can be serialized (stringify'd) to a textual JSON representation that uses the standard JSON type system. As JSON has no syntax to expresse DATEs or TIMESTAMPs, a binary `DATE` value would become a JSON string (in `ISO 8601` format). The ISO standard SQL operator `JSON_Serialize()` performs the conversion to textual JSON. Incompatible 'sqlType' and 'type' combinations (e.g. TIMESTAMP and Boolean) can we detected at schema compilation time and raised as an error.
+The following standard values are valid:
+ - object
+ - array
+ - string
+ - number
+ - integer
+ - boolean
+ - null
 
-Therefore, there is a 'type duality' of 'type' and 'sqlType' values. A JSON schema document can contain both at the same time which allows to perform validation with external validators (outside the database) as well as in-database validators using the same schema. The external validator uses the 'type' and 'format' attributes whereas the internal validator prefers the `'sqlType'` attribute if present. If no `'sqlType'` attribute is present then the in-database validators fallsback on the 'type' and 'format' attributes and performs exactly like the external validator. 
+The behavior of the above values for the `'extendedType'` keyword in the JSON schema is the same as that of `'type'` keyword.
 
-Examples:
+The following values are extended types and must be supported by all validators that support `'extendedType'` keyword:
+ - date
+ - timestamp
+ - timestampTz
+ - interval
+ - binary
+ - double
+ - float
+
+Just like `'type'`, `'extendedType'` keyword can have a string or an array value. The following schema documents are valid:
+
+`{"extendedType": "float"}`
+
+`{"extendedType": ["date", "timestamp", "timestampTz"]}`
+
+We define a set of values allowed for `'extendedType'` based on existing standardized type systems like SQL, SQL/JSON. `'extendedType'` values space is a super set of `'type'`'s value space, i.e. it allows all values permitted in type and in addition supports other types as well. 
+
+Most of these types are already supported in the JSON type and the SQL operator `JSON_Serialize()` specifies how these values undergo serialization to textual JSON. Both JSON type and `JSON_Serialize()`  SQL operator are already part of the open ISO SQL standard.
+
+`JSON_Serialize()` defines how a richer type system gets 'reduced' to a smaller type system by lossy type conversions. For example, binary date and interval values undergo conversions to strings in ISO 8601 format. A binary value will be coverted to a hexadecimal encoded string. The mapping defined by `JSON_Serialize()` therefore defines how a third-party validator treats the extended types. A vendor validator which has been built specifically for a product (e.g. Oracle Database validator) can validate the richer type system, as well as strings that are in the format defined by the mapping. For example, a validator that supports `'extendedType'` successfully  validates the document instance: `"2022-01-31"` against the schema: `{"extendedType": "date"}`. However, the document instance `"some string"` fails validation against the schema: `{"extendedType": "interval"}`, as `"some string"` is not a valid ISO 8601 interval string.
+
+#### Extensibility
+Vendors are allowed to extend the set of allowed values for `'extendedType'`. This makes the `'extendedType'` open for vendor-specific extensions - although we want to keep this list minimal. A validator that does not support this keyword will treat it as a annotation. On the other hand, a vendor that does support the keyword, can validate, and in addition, perform type coercion to a relevant binary type (if vendor supports a binary format for JSON), as discussed in the subsequent section.
+
+### Type coercion/cast during DMLs
+
+For databases that support a binary JSON format, data can be encoded on the client. For example, a MongoDB driver sends BSON data to the MongoDB server. In such cases, the database does not have to convert textual JSON to its binary representation and hence validation using `'extendedType'` can be performed. It is to be noted that in this case no external validator is being used at all. On the other hand, if textual JSON is sent to the database, it is followed by an encoding process to a binary representation (server-side encoding). In such circumstances, the schema validator can operate in *COERCE* or *CAST* mode. That is, the binary encoder can use the value specified for the `'extendedType'` keyword in the JSON schema and encode the scalar field to its binary representation.
+
+This facility is optional and an explicit syntax is needed to enable it. We will use `'CAST'` keyword to specify this mode of operation:
+
 ```
-{
-  "type": "string",
-  "sqlType”: "timestamp",
-  "format”: "date-time"
-}
-```
-```
-{
-  "type”: "string”,
-  "sqlType”: "varchar(100)”,
-  "maxLength”: 100
-}
-```
-```
-{
-  "sqlType”: "double”,
-  "oneOf" : [
-   {"type": "number"},
-    {"type": "string", "enum": ["NaN", "Inf", "-Inf"]}
-  ]
-}
-```
-
-## Automatic type cast during insert
-
-For databases that support a binary JSON format data can be encoded on the client - for example, a MongoDB driver sends BSON data to the MongoDB server. In such case the database does not have to convert textual JSON to its binary representation and hence validation using `'sqlType'` can be performed. It is to be noted that in this case no external validator is being used at all.
-It is a different story if textual JSON is sent to the database follwed by an encoding process to a binary representation (server-side encoding). In this case, an external validator may accept that a value is a 'date-time' formatted string (`'type'` and `'format'` attributes) but the internal validator would reject the insertion as the same string is not a DATE `'sqlType'`. 
-What is needed is the inverse of `JSON_Serialize()`: where `JSON_Serialize()` mapps a richer type system to a smaller one we now need additional information to convert a 'reduced' type to its 'real' type). This information exists in the JSON schema - it defines the type for scalar attributes, for example that a birthdate is a DATE type. In this case (INSERT) in addition to the validation we also do a type coercion lookup to cast a string birthdate to a DATE. This is optional and explicit syntax is needed to enable it.
-
-```
-CREATE TABLE t1 (
+CREATE TABLE jtab (
   id NUMBER,
-  data JSON VALIDATE CAST USING '<json_schema_expr>'
+  jcol JSON CHECK(jcol IS JSON VALIDATE CAST USING '{
+    "type": "object",
+    "properties": {
+      "firstName": {
+        "extendedType": "string",
+        "maxLength": 50
+      },
+      "birthDate" : {
+        "extendedType": "date"
+      }
+    },
+    "required": ["firstName", "birthDate"]
+  }')
 );
 ```
 
-Note: eJSON is a method where textual JSON conveys additional type information by wrapping a value into a type information object. For eJSON we do not need to perform type coercion.
+The following textual JSON is a valid document per the above schema:
 
-Example:  `{"birthday":{"$date":"01.04.2021"}}`
+```
+{
+  "firstName": "Scott",
+  "birthDate": "1990-04-02"
+}
+```
 
+In *COERCE/CAST* mode, vendors can encode the `"firstName"` and `"birthDate"` fields in the textual JSON to an appropriate binary representation.
 
-*SQL-Syntax to define a JSON Schema*
-(this is more a thought at this point and not a proposal yet).
+### SQL syntax for JSON Schema
+(This is more a thought at this point and not a proposal yet).
+
 The idea is to provide a syntax to define a JSON Schema which looks more like SQL. We feel such syntax would be preferred by SQL-centric developers.
 
 Examples:
@@ -145,19 +213,38 @@ CREATE TABLE customers (
 ```
 
 
-## Using JSON schema to describe database objects and generated JSON
+### Describing database objects using JSON schema
 
-This use case is not about persistent JSON data being stored in a database but about transient data being generated by the database - and then shipped to client applications.
+This use case is not about persistent JSON data in a database, but about transient data being generated by the database - and then shipped to client applications. Some databases allow the creation of JSON data from relational tables which themselves have data types and constraints.
 
-A consumer of this JSON data likely wants to understand mor about the data: the used field names, the value types and ranges and the shape of objects/arrays. JSON schema is capable of conveying all this information - in addition it can be used to perform client-side (external) validations after data has been modified. For example, an update could be rejected because a value exceeded its maximum length.
+A consumer of this JSON data likely wants to understand more about the data: the used field names, the value types and ranges and the shape of objects/arrays. JSON schema is capable of conveying all this information - in addition it can be used to perform client-side (external) validations after data has been modified. For example, an update could be rejected because a value exceeded its maximum length.
 
-We propose a mapping mechanism between database (column) constraint and JSON schema rules. This mapping mechanism can then be applied to describe entire tables, objects and even query results. The mapping will preserve the `'sqlType'` name, it will try to map column constraints (e.g. `NOT NULL`) to equivalent validation rules (`'required'`). Additional keywords like `'sqlDomainName'` are possible.
+We propose a mapping mechanism between database (column) constraint and JSON schema rules. This mapping mechanism can then be applied to describe entire tables, objects and even query results. The mapping will preserve the `'extendedType'` name, it will try to map column constraints (e.g. `NOT NULL`, `CHECK`) to equivalent validation rules. Additional keywords like `'sqlDomainName'` are possible.
 
+#### Keywords for describing database objects
 
-### Examples 
-The function to invoke this mapping is not part of this proposal. We use methods of the `dbms_json` package.
+The following keywords are used to specify the attributes of the object:
+| Keyword         | Value type      | Value description |
+| ---             | ---             | --- |
+| title	          | string          | Name of the object being described |
+| sqlObjectType	  | string          | Type of the database object |
+| description	    | string          | Comment on the object (table/view) |
+| sqlPrimaryKey   | string or array | Name(s) of the primary key column(s) |
 
-#### Describe a database table
+The following keywords are used to specify the attributes of the column values:
+| Keyword         | Value type       | Value description |
+| ---             | ---              | --- |
+| extendedType	  | string or array  | Type of the JSON data generated by converting the column value to JSON |
+| description	    | string           | Comments on the column
+| maxLength	      | integer          | Maximum size of the value
+| minLength	      | integer          | Minimum size of the value
+| sqlPrecision    | integer	         | Precision for numeric, timestamp types
+| sqlScale        | integer          | Scale for numeric types
+
+#### Examples 
+We use the function `describe` in `dbms_json_schema` package.
+
+##### Describe a database table
 
 ```
 SELECT dbms_json_schema.describe('EMPLOYEES', 'HR') FROM dual;
@@ -184,7 +271,7 @@ SELECT dbms_json_schema.describe('EMPLOYEES', 'HR') FROM dual;
 …
 ```
 
-#### Describe a database object type
+##### Describe a database object type
 
 ```
 SELECT  dbms_json_schema.describe('ADDRESS_TYP') AS SCHEMA FROM dual;
@@ -214,11 +301,11 @@ SELECT  dbms_json_schema.describe('ADDRESS_TYP') AS SCHEMA FROM dual;
       "maxLength" : 2
 …
 ```
-The first argument for this function is the object to be described. The second one is schema name and is optional.
-`describe_schema()` function also takes in column name as optional argument. If a column name is passed,  the schema for that column alone is generated.
+The first argument for this function is the name of the object to be described. The second one is schema name and is optional.
+`describe()` function also takes in column name as optional argument. If a column name is passed,  the schema for that column alone is generated. Only table, view, or type can be described, not other types.
 
-#### Describe a column in table/view
-It is possible to restrict the JSON schema to be generated to a single column, by specifying the column name (optional parameter) in call to `describe_schema()`.
+##### Describe a column in table/view
+It is possible to restrict the JSON schema to be generated to a single column, by specifying the column name (optional parameter) in call to `describe()`.
 
 ```
 SELECT dbms_json_schema.describe('EMPLOYEES', 'HR', 'JOB_ID') FROM dual;
