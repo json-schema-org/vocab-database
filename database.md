@@ -165,7 +165,7 @@ The following textual JSON is a valid document per the above schema:
 }
 ```
 
-In *COERCE/CAST* mode, vendors can encode the `"firstName"` and `"birthDate"` fields in the textual JSON to an appropriate binary representation.
+In *COERCE/CAST* mode, vendors can encode the `"firstName"` and `"birthDate"` fields in the textual JSON to string and binary date formats respectively.
 
 ### SQL syntax for JSON Schema
 (This is more a thought at this point and not a proposal yet).
