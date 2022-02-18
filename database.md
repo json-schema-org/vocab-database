@@ -180,8 +180,10 @@ In *COERCE/CAST* mode, vendors can encode the `"firstName"` and `"birthDate"` fi
 ```
 {
   "type": "object"
-  "salary": {
-    "extendedType": "integer"
+  "properties": {
+    "salary": {
+      "extendedType": "integer"
+    }
   }
 }
 ```
