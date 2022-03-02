@@ -37,7 +37,7 @@ We propose to extend 'IS JSON' operator to also perform JSON Schema validation. 
 ```
 SELECT  <column_list>
 FROM    <table_name> 
-WHERE   <column_name> IS JSON VALIDATE USING '<JSON_schema_expr>';
+WHERE   <column_name> IS JSON VALIDATE USING '<JSON_schema_literal>';
 ```
 Note: `IS JSON` returns a `true|false` answer. In the case of `false` return, there is no reason given for why the JSON instance failed the schema validation. To return proper error messages additional functionality is needed, like a package function, etc.
 
@@ -49,35 +49,38 @@ The following example illustrates the use of `IS JSON` in a `CHECK` constraint e
 ```
 CREATE TABLE jtab (
   id    NUMBER(6)  PRIMARY KEY,
-  jcol  JSON       CHECK (jcol IS JSON VALIDATE USING '{
-	"type": "object",
-	"properties": {
-		"id": {
-			"type": "number"
-		},
-		"name": {
-			"type": "string",
-			"maxLength": 20
-		},
-		"addresses": {
-			"type": "array",
-			"minItems": 1,
-			"items": {
-				"type": "object",
-				"properties": {
-					"street": {
-						"type": "string",
-						"maxLength": 100
-					},
-					"zip": {
-						"type": "string",
-						"maxLength": 10
-					}
-				}
-			}
-		}
-	},
-	"required": ["id"]
+  jcol  JSON       CHECK (jcol IS JSON VALIDATE USING 
+  '{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "number"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "addresses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "street": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "zip": {
+            "type": "string",
+            "maxLength": 10
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "id"
+  ]
 }')
 );
 ```
