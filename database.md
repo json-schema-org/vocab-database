@@ -1,5 +1,19 @@
 # Proposal for a JSON Schema vocabulary for common database use cases.
 
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Current state of affairs and high-level goals](#current-state-of-affairs-and-high-level-goals)
+3. [JSON Schema - database use cases](#json-schema---database-use-cases)
+
+    1. [Validation using IS JSON](#validation-using-is-json)
+    2. [Validation of extended types](#validation-of-extended-types)
+    3. [Type coercion/cast during DMLs](#type-coercioncast-during-dmls)
+    4. [SQL syntax for JSON Schema](#sql-syntax-for-json-schema)
+    5. [Describing database objects using JSON schema](#describing-database-objects-using-json-schema)
+    6. [Generating validation report](#generating-validation-report)
+
+
 ## Introduction
 
 The following write-up describes common database use cases that could benefit from JSON schema. It also proposes some extensions to JSON schema (additional keywords that can be ignored by validators not dealing with database use cases). The goal of this project is to solve common use cases in a product and vendor independent manner. The proposal also caters to vendors (not database ones necessarily) that process JSON using a binary format. The current draft is written from a SQL point of view (Oracle) but we should make sure that NoSQL products like MongoDB are not excluded. Also, any solution should allow vendor-specific extensions. Feedback, request for additions and modifications in this proposal are appreciated. 
@@ -25,7 +39,7 @@ The following write-up describes common database use cases that could benefit fr
 The existing and ISO standard SQL operator `IS JSON` performs JSON syntax checks and Oracle's implementation allows for extra conditions to be met - like unique key names. `IS JSON` can be used in the `WHERE` clause of a query to serve as a row filter or in a check constraint to reject any insert/update that do not satisfy the `IS JSON` condition(s).
 
 Example: 
-```
+```sql
 SELECT  data
 FROM    mytable
 WHERE   data IS JSON (WITH UNIQUE KEYS);
@@ -34,7 +48,7 @@ WHERE   data IS JSON (WITH UNIQUE KEYS);
 #### Proposal
 
 We propose to extend 'IS JSON' operator to also perform JSON Schema validation. For example,
-```
+```sql
 SELECT  <column_list>
 FROM    <table_name> 
 WHERE   <column_name> IS JSON VALIDATE USING '<JSON_schema_literal>';
@@ -46,7 +60,7 @@ Note: `IS JSON` returns a `true|false` answer. In the case of `false` return, th
 
 The following example illustrates the use of `IS JSON` in a `CHECK` constraint expression:
 
-```
+```sql
 CREATE TABLE jtab (
   id    NUMBER(6)  PRIMARY KEY,
   jcol  JSON       CHECK (jcol IS JSON VALIDATE USING 
@@ -133,10 +147,10 @@ Most of these types are already supported in the JSON type and the SQL operator 
 
 #### Keywords applicable for extended types
 The keywords that are applicable for number and integer types are also applicable for the extended numeric types: `float` and `double`:
-```
+```json
 {
   "extendedType": ["float", "double"],
-  "minimum": 35.75
+  "minimum": 35.75,
   "multipleOf": 5.25
 }
 ```
@@ -150,7 +164,7 @@ For databases that support a binary JSON format, data can be encoded on the clie
 
 This facility is optional and an explicit syntax is needed to enable it. We will use `'CAST'` keyword to specify this mode of operation:
 
-```
+```sql
 CREATE TABLE jtab (
   id NUMBER,
   jcol JSON CHECK(jcol IS JSON VALIDATE CAST USING '{
@@ -171,7 +185,7 @@ CREATE TABLE jtab (
 
 The following textual JSON is a valid document per the above schema:
 
-```
+```json
 {
   "firstName": "Scott",
   "birthDate": "1990-04-02"
@@ -180,9 +194,9 @@ The following textual JSON is a valid document per the above schema:
 
 In *COERCE/CAST* mode, vendors can encode the `"firstName"` and `"birthDate"` fields in the textual JSON to string and binary date formats respectively.
 
-```
+```json
 {
-  "type": "object"
+  "type": "object",
   "properties": {
     "salary": {
       "extendedType": "integer"
@@ -193,14 +207,14 @@ In *COERCE/CAST* mode, vendors can encode the `"firstName"` and `"birthDate"` fi
 
 Given the above schema, in CAST mode, the value for the field `"salary"` will be cast to an integer. Example:
 
-```
+```json
 {
   "salary": 88733.50
 }
 ```
 will be cast to
 
-```
+```json
 {
   "salary": 88733
 }
@@ -208,9 +222,9 @@ will be cast to
 by the validator. For that matter, if the salary value was a string with numeric characters, example `"88733.50"` , it would be cast to the same integer value `88733` as well.
 
 Keywords for specifying range, can be used on `date`, `timestamp`, `timestampTz` and `interval` extended types:
-```
+```json
 {
-  "extendedType": "date"
+  "extendedType": "date",
   "minimum": "2020-03-04"
 }
 ```
@@ -223,7 +237,7 @@ The above schema validates date values that equal or greater than the date value
 The idea is to provide a syntax to define a JSON Schema which looks more like SQL. We feel such syntax would be preferred by SQL-centric developers.
 
 Examples:
-```
+```sql
 CREATE TABLE customers (
   data JSON {
      id       NUMBER NOT NULL, 
@@ -239,7 +253,7 @@ CREATE TABLE customers (
 ```
 
 is equivalent to:
-```
+```sql
 CREATE TABLE customers (
   data JSON,
   check data IS JSON (VALIDATE USING '
@@ -296,12 +310,12 @@ The following keywords are used to specify the attributes of the column values:
 
 For now, the generated JSON schema will list the table name and column names for each of the foreign keys. 
 
-```
+```json
 "sqlForeignKeys" : [
   {
     "DEPTID": {
       "sqlObjectName": "DEPARTMENTS",
-      "sqlObjectOwner": "HR"
+      "sqlObjectOwner": "HR",
       "sqlColumnName": "DEPARTMENT_ID"
     }
   } 
@@ -312,17 +326,17 @@ The above schema means that the column `DEPTID` is a foreign key defined and it 
 
 Note that  a composite foreign key is also possible:
 
-```
+```json
 "sqlForeignKeys" : [
   {
     "ORDER_ID": {
       "sqlObjectName": "ORDERS",
-      "sqlObjectOwner": "OE"
+      "sqlObjectOwner": "OE",
       "sqlColumnName": "ORDERID"
     },
     "CUSTOMER_ID": {
       "sqlObjectName": "ORDERS",
-      "sqlObjectOwner": "OE"
+      "sqlObjectOwner": "OE",
       "sqlColumnName": "CUSTID"
     }
   }  
@@ -334,7 +348,7 @@ We use the function `describe` in `dbms_json_schema` package.
 
 ##### Describe a database table
 
-```
+```sql
 SELECT dbms_json_schema.describe('EMPLOYEES', 'HR') FROM dual;
 { 
   "sqlObjectName" : "EMPLOYEES", 
@@ -363,7 +377,7 @@ SELECT dbms_json_schema.describe('EMPLOYEES', 'HR') FROM dual;
 
 ##### Describe a database object type
 
-```
+```sql
 SELECT  dbms_json_schema.describe('ADDRESS_TYP', 'SCOTT') AS SCHEMA FROM dual;
 {
   "sqlObjectName" : "ADDRESS_TYP",
@@ -394,7 +408,7 @@ The first argument for this function is the name of the object to be described. 
 ##### Describe a column in table/view
 It is possible to restrict the JSON schema to be generated to a single column, by specifying the column name (optional parameter) in call to `describe()`.
 
-```
+```sql
 SELECT dbms_json_schema.describe('EMPLOYEES', 'HR', 'JOB_ID') FROM dual;
 
 { 
@@ -408,7 +422,7 @@ SELECT dbms_json_schema.describe('EMPLOYEES', 'HR', 'JOB_ID') FROM dual;
 ### Generating validation report
 We propose a function to generate the schema validation report. The report contains information on the status of validation, i.e. if validation succeeded or failed, and the reasons for failure. Here is an example:
 
-```
+```sql
 SELECT dbms_json_schema.validate_report('{"a" : 1}', '{"type": "object"}') AS report FROM dual;
 
 REPORT
