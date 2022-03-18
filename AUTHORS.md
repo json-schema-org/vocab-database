@@ -1,4 +1,4 @@
-# Authors for database vocabulary
+# Authors
 
 * __[Beda Hammerschmidt](https://github.com/bchammer)__
 * __[Srikrishnan Suresh](https://github.com/SrikrishnanS)__
