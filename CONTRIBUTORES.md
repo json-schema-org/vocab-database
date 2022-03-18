@@ -1,2 +1,2 @@
-# Contributors for database vocabulary
+# Contributors
 * __[Ben Hutton](https://github.com/Relequestual)__
