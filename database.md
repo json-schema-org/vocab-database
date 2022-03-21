@@ -290,11 +290,12 @@ The following keywords are used to specify the attributes of the object:
 | Keyword         | Value type      | Value description |
 | ---             | ---             | --- |
 | sqlObjectName	  | string          | Name of the object being described |
-| sqlObjectOwner	| string          | Name of the owner of the object |
+| sqlObjectOwner  | string          | Name of the owner of the object |
 | sqlObjectType	  | string          | Type of the database object |
-| description	    | string          | Comment on the object (table/view) |
+| description	  | string          | Comment on the object (table/view) |
 | sqlPrimaryKey   | string or array | Name(s) of the primary key column(s) |
 | sqlForeignKey   | array           | Foreign keys on the table |
+| sqlUnique       | array           | Unique columns |
 
 The following keywords are used to specify the attributes of the column values:
 | Keyword         | Value type       | Value description |
@@ -341,6 +342,18 @@ Note that  a composite foreign key is also possible:
     }
   }  
 ]
+```
+#### Unique columns
+
+Database columns can be marked as `UNIQUE` to ensure the column values are unique. Composite unique columns are also allowed, i.e. a combination of columns can be marked as `UNIQUE`. We will report this in the generated schema using `sqlUnique` keyword. Example:
+
+```json
+"sqlUnique" :
+  [
+    [
+      "EMAIL"
+    ]
+  ]
 ```
 
 #### Examples 
